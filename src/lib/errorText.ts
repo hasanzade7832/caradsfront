@@ -1,7 +1,7 @@
 // src/lib/errorText.ts
 export function errorToText(err: any): string {
   try {
-    // axios style
+    // axios stylesxx
     const data = err?.response?.data;
 
     // اگر string بود همون
