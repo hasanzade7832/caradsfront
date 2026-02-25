@@ -6,7 +6,17 @@ import { api } from "@/lib/api";
 import { startSignalR } from "@/lib/signalr";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "next-themes";
-import { Search, X, Eye, Users, Car, FileText, Send } from "lucide-react";
+import {
+  Search,
+  X,
+  Eye,
+  Users,
+  Car,
+  FileText,
+  Send,
+  Radio,
+  Clock,
+} from "lucide-react";
 import { useRouter } from "next/navigation";
 import dayjs from "dayjs";
 import jalaliday from "jalaliday";
@@ -42,7 +52,7 @@ type UserInfo = {
 };
 
 type TelegramMsg = {
-  id: string; // client-side UUID برای key
+  id: string;
   text: string;
   senderName: string;
   sentAt: string;
@@ -203,9 +213,7 @@ function DescModal({
 }
 
 // ─────────────────────────────────────────────
-// AdRow — fixed: no big spacer, vertical divider
-// between توضیحات and username, wider desc button,
-// tooltip z-index fix
+// AdRow
 // ─────────────────────────────────────────────
 function AdRow({
   ad,
@@ -275,7 +283,6 @@ function AdRow({
   const hasDesc = !!ad.description?.trim();
   const gb = gearboxLabel(ad.gearbox);
 
-  // chip style — plain, no tooltip
   const chip = (content: React.ReactNode) => (
     <span
       className="text-xs font-semibold whitespace-nowrap shrink-0"
@@ -339,10 +346,6 @@ function AdRow({
           </div>
         )}
 
-        {/*
-          Layout (RTL): [نام+نوع] | [chips+قیمت وسط‌چین] | [username + بازدید]
-          سه ستون: راست، وسط (flex-1 + justify-center)، چپ
-        */}
         <div
           className="relative z-10 flex items-center px-3 py-2"
           style={{ direction: "rtl", gap: 8, minWidth: 0 }}
@@ -363,26 +366,23 @@ function AdRow({
             </span>
           </div>
 
-          {/* divider */}
           <div
             className="shrink-0 h-4 w-px opacity-20"
             style={{ background: "currentColor" }}
           />
 
-          {/* ── ستون وسط: chips + قیمت + توضیحات — وسط‌چین ── */}
+          {/* ── ستون وسط ── */}
           <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0 overflow-hidden">
             {chip(ad.year)}
             {chip(ad.color)}
             {chip(`${Number(ad.mileageKm).toLocaleString("fa-IR")} km`)}
             {gb !== "—" && chip(gb)}
-            {/* قیمت */}
             <span
               className="text-xs font-extrabold whitespace-nowrap shrink-0 px-2.5 py-0.5 rounded-xl border"
               style={{ borderColor, background: softGradient }}
             >
               {priceToText(ad.price)}
             </span>
-            {/* دکمه توضیحات */}
             <button
               type="button"
               disabled={!hasDesc}
@@ -439,13 +439,12 @@ function AdRow({
             </button>
           </div>
 
-          {/* divider */}
           <div
             className="shrink-0 h-4 w-px opacity-20"
             style={{ background: "currentColor" }}
           />
 
-          {/* ── ستون چپ: username + بازدید ── */}
+          {/* ── ستون چپ ── */}
           <div className="flex items-center gap-1.5 shrink-0">
             {userInfo && (
               <span
@@ -492,7 +491,70 @@ function AdRow({
 }
 
 // ─────────────────────────────────────────────
-// SitePanel — پنل پیام‌های تلگرام
+// MessageRow — ردیف یک پیام تلگرام
+// ─────────────────────────────────────────────
+function MessageRow({
+  msg,
+  borderColor,
+  softGradient,
+  isDark,
+}: {
+  msg: TelegramMsg;
+  borderColor: string;
+  softGradient: string;
+  isDark: boolean;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10, scale: 0.97 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ type: "spring", stiffness: 340, damping: 28 }}
+    >
+      <div
+        className="flex items-center gap-2 rounded-[10px] border px-3 py-1.5"
+        style={{
+          borderColor,
+          background: isDark
+            ? "linear-gradient(90deg,rgba(56,189,248,0.04),rgba(217,70,239,0.03))"
+            : "linear-gradient(90deg,rgba(56,189,248,0.05),rgba(217,70,239,0.03))",
+          direction: "rtl",
+        }}
+      >
+        <span
+          className="text-[11px] font-extrabold whitespace-nowrap shrink-0 px-1.5 py-0.5 rounded-lg"
+          style={{ background: softGradient }}
+        >
+          {msg.senderName}
+        </span>
+
+        <div
+          className="shrink-0 h-3.5 w-px opacity-20"
+          style={{ background: "currentColor" }}
+        />
+
+        <span
+          className="text-xs text-foreground flex-1 min-w-0 leading-relaxed"
+          style={{ wordBreak: "break-word" }}
+        >
+          {msg.text}
+        </span>
+
+        <div
+          className="shrink-0 h-3.5 w-px opacity-20"
+          style={{ background: "currentColor" }}
+        />
+
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 font-mono">
+          {msg.sentAt}
+        </span>
+      </div>
+    </motion.div>
+  );
+}
+
+// ─────────────────────────────────────────────
+// SitePanel — پنل پیام‌های تلگرام با تب‌های زنده/دیروز
 // ─────────────────────────────────────────────
 function SitePanel({
   borderColor,
@@ -506,23 +568,107 @@ function SitePanel({
   messages: TelegramMsg[];
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [activeTab, setActiveTab] = useState<"live" | "yesterday">("live");
+  const [historyMsgs, setHistoryMsgs] = useState<TelegramMsg[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
   const bg = isDark
     ? "linear-gradient(180deg,rgba(0,0,0,.55) 0%,rgba(0,0,0,.20) 100%)"
     : "linear-gradient(180deg,color-mix(in srgb,var(--card) 94%,transparent),color-mix(in srgb,var(--card) 86%,transparent))";
 
-  // اسکرول خودکار به آخرین پیام
+  // اسکرول خودکار به آخرین پیام (فقط در تب زنده)
   useEffect(() => {
-    if (scrollRef.current) {
+    if (activeTab === "live" && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, activeTab]);
+
+  // لود پیام‌های دیروز
+  useEffect(() => {
+    if (activeTab !== "yesterday") return;
+    setHistoryLoading(true);
+    api
+      .get("/api/telegram/messages/history")
+      .then((res) => {
+        const list = res.data ?? [];
+        const mapped: TelegramMsg[] = (list as any[]).map((m) => ({
+          id: String(
+            m.id || `${m.sentAt}-${m.senderName}-${String(m.text).slice(0, 10)}`
+          ),
+          text: m.text,
+          senderName: m.senderName,
+          sentAt: m.sentAt,
+        }));
+        setHistoryMsgs(mapped);
+      })
+      .catch(() => setHistoryMsgs([]))
+      .finally(() => setHistoryLoading(false));
+  }, [activeTab]);
+
+  // اسکرول به پایین وقتی تاریخچه لود شد
+  useEffect(() => {
+    if (activeTab === "yesterday" && !historyLoading && scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [historyMsgs, historyLoading, activeTab]);
+
+  const displayMsgs = activeTab === "live" ? messages : historyMsgs;
+
+  const tabBtn = (
+    id: "live" | "yesterday",
+    label: string,
+    icon: React.ReactNode,
+    count?: number
+  ) => {
+    const isActive = activeTab === id;
+    return (
+      <button
+        type="button"
+        onClick={() => setActiveTab(id)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shrink-0"
+        style={{
+          background: isActive
+            ? softGradient
+            : isDark
+            ? "rgba(255,255,255,0.05)"
+            : "rgba(0,0,0,0.04)",
+          borderWidth: 1,
+          borderStyle: "solid",
+          borderColor: isActive ? borderColor : "transparent",
+          color: isActive
+            ? "hsl(var(--foreground))"
+            : "hsl(var(--muted-foreground))",
+          transform: isActive ? "none" : "none",
+        }}
+      >
+        {icon}
+        {label}
+        {count !== undefined && count > 0 && (
+          <span
+            className="text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none"
+            style={{
+              background: isActive
+                ? isDark
+                  ? "rgba(0,0,0,0.25)"
+                  : "rgba(255,255,255,0.5)"
+                : isDark
+                ? "rgba(255,255,255,0.10)"
+                : "rgba(0,0,0,0.08)",
+            }}
+          >
+            {count}
+          </span>
+        )}
+      </button>
+    );
+  };
 
   return (
     <div
       className="rounded-[22px] border h-full flex flex-col overflow-hidden"
       style={{ borderColor, background: bg }}
     >
-      {/* هدر */}
+      {/* ── هدر ── */}
       <div
         className="flex items-center gap-3 px-4 py-3 shrink-0 border-b"
         style={{ borderColor, direction: "rtl" }}
@@ -541,85 +687,65 @@ function SitePanel({
             پیام‌های زنده از گروه
           </p>
         </div>
-        {/* badge تعداد */}
-        {messages.length > 0 && (
-          <span
-            className="text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0"
-            style={{ background: softGradient }}
-          >
-            {messages.length}
-          </span>
+      </div>
+
+      {/* ── تب‌ها ── */}
+      <div
+        className="flex items-center gap-2 px-3 py-2 shrink-0 border-b"
+        style={{ borderColor, direction: "rtl" }}
+      >
+        {tabBtn("live", "زنده", <Radio className="h-3 w-3" />, messages.length)}
+        {tabBtn(
+          "yesterday",
+          "دیروز",
+          <Clock className="h-3 w-3" />,
+          activeTab === "yesterday" ? historyMsgs.length : undefined
         )}
       </div>
 
-      {/* لیست پیام‌ها */}
+      {/* ── لیست پیام‌ها ── */}
       <div
         ref={scrollRef}
         className="flex-1 overflow-y-auto overflow-x-hidden px-3 py-2 space-y-1"
         style={{ scrollbarWidth: "thin", direction: "rtl" }}
       >
-        {messages.length === 0 ? (
+        {/* حالت لودینگ دیروز */}
+        {activeTab === "yesterday" && historyLoading ? (
+          <div className="h-full flex flex-col items-center justify-center gap-2 opacity-40">
+            <div
+              className="h-6 w-6 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: "currentColor" }}
+            />
+            <p className="text-xs font-semibold">در حال بارگذاری...</p>
+          </div>
+        ) : displayMsgs.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center gap-2 opacity-35">
-            <Send className="h-7 w-7" />
-            <p className="text-xs font-semibold">
-              منتظر پیام از گروه تلگرام...
-            </p>
+            {activeTab === "live" ? (
+              <>
+                <Send className="h-7 w-7" />
+                <p className="text-xs font-semibold">
+                  منتظر پیام از گروه تلگرام...
+                </p>
+              </>
+            ) : (
+              <>
+                <Clock className="h-7 w-7" />
+                <p className="text-xs font-semibold">
+                  پیامی برای دیروز یافت نشد
+                </p>
+              </>
+            )}
           </div>
         ) : (
           <AnimatePresence initial={false}>
-            {messages.map((msg) => (
-              <motion.div
+            {displayMsgs.map((msg) => (
+              <MessageRow
                 key={msg.id}
-                initial={{ opacity: 0, y: 10, scale: 0.97 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ type: "spring", stiffness: 340, damping: 28 }}
-              >
-                {/* ردیف پیام — یه خط، مثل آگهی‌ها */}
-                <div
-                  className="flex items-center gap-2 rounded-[10px] border px-3 py-1.5"
-                  style={{
-                    borderColor,
-                    background: isDark
-                      ? "linear-gradient(90deg,rgba(56,189,248,0.04),rgba(217,70,239,0.03))"
-                      : "linear-gradient(90deg,rgba(56,189,248,0.05),rgba(217,70,239,0.03))",
-                    direction: "rtl",
-                  }}
-                >
-                  {/* نام فرستنده */}
-                  <span
-                    className="text-[11px] font-extrabold whitespace-nowrap shrink-0 px-1.5 py-0.5 rounded-lg"
-                    style={{ background: softGradient }}
-                  >
-                    {msg.senderName}
-                  </span>
-
-                  {/* divider */}
-                  <div
-                    className="shrink-0 h-3.5 w-px opacity-20"
-                    style={{ background: "currentColor" }}
-                  />
-
-                  {/* متن پیام — flex-1 تا جا بشه */}
-                  <span
-                    className="text-xs text-foreground flex-1 min-w-0 leading-relaxed"
-                    style={{ wordBreak: "break-word" }}
-                  >
-                    {msg.text}
-                  </span>
-
-                  {/* divider */}
-                  <div
-                    className="shrink-0 h-3.5 w-px opacity-20"
-                    style={{ background: "currentColor" }}
-                  />
-
-                  {/* ساعت */}
-                  <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0 font-mono">
-                    {msg.sentAt}
-                  </span>
-                </div>
-              </motion.div>
+                msg={msg}
+                borderColor={borderColor}
+                softGradient={softGradient}
+                isDark={isDark}
+              />
             ))}
           </AnimatePresence>
         )}
@@ -692,7 +818,6 @@ export default function HomePage() {
   const [selectedAd, setSelectedAd] = useState<Ad | null>(null);
   const [descAd, setDescAd] = useState<Ad | null>(null);
   const [descOpen, setDescOpen] = useState(false);
-  // پیام‌های تلگرام — حداکثر ۲۰۰ پیام نگه می‌داریم
   const [telegramMsgs, setTelegramMsgs] = useState<TelegramMsg[]>([]);
 
   const fetchedUserIds = useRef<Set<number>>(new Set());
@@ -732,7 +857,6 @@ export default function HomePage() {
 
   useEffect(() => {
     let unsub: (() => void) | null = null;
-
     let pollTimer: any = null;
 
     const startTelegramPolling = () => {
@@ -743,14 +867,34 @@ export default function HomePage() {
           const res = await api.get("/api/telegram/messages");
           const list = res.data ?? [];
 
-          setTelegramMsgs(() => {
-            const mapped: TelegramMsg[] = (list as any[]).map((m, idx) => ({
-              id: `${idx}-${m.sentAt}-${m.senderName}-${m.text}`,
-              text: m.text,
-              senderName: m.senderName,
-              sentAt: m.sentAt,
-            }));
-            return mapped.slice(-200);
+          setTelegramMsgs((prev) => {
+            const existingIds = new Set(prev.map((m) => m.id));
+            const newMsgs: TelegramMsg[] = (list as any[])
+              .filter(
+                (m) =>
+                  !existingIds.has(
+                    String(
+                      m.id ||
+                        `${m.sentAt}-${m.senderName}-${String(m.text).slice(
+                          0,
+                          10
+                        )}`
+                    )
+                  )
+              )
+              .map((m) => ({
+                id: String(
+                  m.id ||
+                    `${m.sentAt}-${m.senderName}-${String(m.text).slice(0, 10)}`
+                ),
+                text: m.text,
+                senderName: m.senderName,
+                sentAt: m.sentAt,
+              }));
+
+            if (newMsgs.length === 0) return prev;
+            const updated = [...prev, ...newMsgs];
+            return updated.length > 200 ? updated.slice(-200) : updated;
           });
         } catch (e) {
           console.log("Polling error:", e);
@@ -772,35 +916,32 @@ export default function HomePage() {
         console.log("SignalR connected, stop polling");
         stopTelegramPolling();
 
-        // اگر SignalR قطع شد، polling فعال شود
         conn.onclose(() => {
           console.log("SignalR closed, start polling");
           startTelegramPolling();
         });
 
-        // ✅ پیام‌های تلگرام
         const onTelegramMessage = (p: {
+          id?: number;
           text: string;
           senderName: string;
           sentAt: string;
         }) => {
           const newMsg: TelegramMsg = {
-            id: `${Date.now()}-${Math.random()}`,
+            id: String(p.id ?? `${Date.now()}-${Math.random()}`),
             text: p.text,
             senderName: p.senderName,
             sentAt: p.sentAt,
           };
           setTelegramMsgs((prev) => {
+            if (prev.some((m) => m.id === newMsg.id)) return prev;
             const updated = [...prev, newMsg];
             return updated.length > 200 ? updated.slice(-200) : updated;
           });
         };
 
-        // بقیه handlerهای خودت (همون‌هایی که الان داری) رو نگه دار
-        // فقط این خط تلگرام حتماً باید باشه:
         conn.on("TelegramMessage", onTelegramMessage);
 
-        // (اختیاری) آنلاین
         try {
           await conn.invoke("GetOnlineCount");
         } catch {}
@@ -931,12 +1072,12 @@ export default function HomePage() {
             style={{ background: "hsl(var(--border))" }}
           />
 
-          {/* layout: list left + panel right */}
+          {/* layout */}
           <div
             className="flex-1 min-h-0 flex gap-3 mt-2"
             style={{ direction: "ltr" }}
           >
-            {/* list — overflow-y scroll, overflow-x hidden, overflow visible on children for tooltips */}
+            {/* لیست آگهی‌ها */}
             <div
               className="flex-1 min-w-0 overflow-y-auto overflow-x-hidden pb-1"
               style={{ scrollbarWidth: "thin" }}
@@ -982,7 +1123,7 @@ export default function HomePage() {
               </div>
             </div>
 
-            {/* right panel — 800px */}
+            {/* پنل تلگرام */}
             <div className="shrink-0" style={{ width: 800 }}>
               <SitePanel
                 borderColor={borderColor}

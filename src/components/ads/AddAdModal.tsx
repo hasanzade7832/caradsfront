@@ -291,7 +291,7 @@ export default function AddAdModal({
         mode === "edit" ? "ویرایش آگهی ناموفق بود" : "ثبت آگهی ناموفق بود",
         {
           id: "add-ad",
-          description: errorToText(e, "لطفاً دوباره تلاش کنید."),
+          description: errorToText(e) || "لطفاً دوباره تلاش کنید.",
         }
       );
     } finally {
